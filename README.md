@@ -1,1 +1,1 @@
-# IOTS-Smart-building
+# IoTS-Smart-building
