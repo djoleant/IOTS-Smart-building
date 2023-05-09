@@ -4,6 +4,9 @@ option csharp_namespace = "SmartBuilding_gRPC.Protos";
 
 service Room {
 	rpc GetRoominfo (RoomValsId) returns (RoomVals);
+	rpc AddRoominfo (RoomVals) returns (RoomValsId);
+	rpc UpdateRoominfo (RoomVals) returns (RoomVals);
+	rpc DeleteRoominfo (RoomValsId) returns (Empty);
 }
 
 message RoomVals {
@@ -18,3 +21,5 @@ message RoomVals {
 message RoomValsId{
 	string value_id = 1;
 }
+
+message Empty {}
