@@ -16,6 +16,8 @@ namespace SmartBuilding_gRPC.Services
             _dbContext = dbContext;
         }
 
+        // GET methods
+
         public override async Task<RoomVals> GetRoominfo(RoomValsId request, ServerCallContext context)
         {
             try
@@ -38,6 +40,8 @@ namespace SmartBuilding_gRPC.Services
             }
         }
 
+        // POST methods
+
         public override async Task<RoomValsId> AddRoominfo(RoomVals request, ServerCallContext context)
         {
             RoomValsId output = new RoomValsId();
@@ -58,6 +62,8 @@ namespace SmartBuilding_gRPC.Services
 
             return await Task.FromResult(output);
         }
+
+        // PUT methods
 
         public override async Task<RoomVals> UpdateRoominfo(RoomVals request, ServerCallContext context)
         {
@@ -84,6 +90,8 @@ namespace SmartBuilding_gRPC.Services
 
             return await Task.FromResult(output);
         }
+
+        // DELETE methods
 
         public override async Task<Empty> DeleteRoominfo(RoomValsId request, ServerCallContext context)
         {
