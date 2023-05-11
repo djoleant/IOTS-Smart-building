@@ -18,9 +18,10 @@ const db = require('./db-info.js');
     
     app.post('/Room', async (req, res) => {
         try {
+            console.log(req)
             const { valueId, timestamp, light, humidity, temperature, co2 } = req.body;
             await db.promise().query(`INSERT INTO Rooms(ValueId,Timestamp,Light,Humidity,Temperature,CO2) VALUES('${valueId}', '${timestamp}', '${light}', '${humidity}', '${temperature}', '${co2}')`);
-            const results = await db.promise().query(`SELECT * FROM SENSOR_VALUES WHERE ValueId = '${valueId}'`);
+            const results = await db.promise().query(`SELECT * FROM Rooms WHERE ValueId = '${valueId}'`);
             res.status(201).send(results[0]);
         }
         catch (err) {
