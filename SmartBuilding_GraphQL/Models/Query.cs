@@ -1,25 +1,14 @@
-﻿using SmartBuilding_GraphQL.IService;
-using SmartBuilding_GraphQL.Models;
+﻿
 
 namespace SmartBuilding_GraphQL.Models
 {
     public class Query
     {
-        IRoomService _roomService = null;
+        [UseProjection]
+        [UseFiltering]
+        [UseSorting]
+        public IQueryable<RoomValues> GetSensorValues([Service] SmartBuildingDbContext context) =>
+            context.Rooms;
 
-        public Query(IRoomService roomService)
-        {
-            _roomService = roomService;
-        }
-
-        public IRoomService Get_roomService()
-        {
-            return _roomService;
-        }
-
-        public List<RoomValues> GetRoomValues()
-        {
-            return _roomService.GetRoomInfos();
-        }
     }
 }
