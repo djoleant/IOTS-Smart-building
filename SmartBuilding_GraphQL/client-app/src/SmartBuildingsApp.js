@@ -32,8 +32,8 @@ function SmartBuildingApp() {
     console.log(data)
     return (
         <div>
-            <h1>Room Value IoT Data</h1>
-            <table>
+            <h1>GraphQL: READ Room Value IoT Data</h1>
+            <table border="1px solid black" style={{ marginLeft: "30px" }}>
                 <thead>
                     <tr>
                         <th>Value ID</th>
@@ -57,6 +57,7 @@ function SmartBuildingApp() {
                     ))}
                 </tbody>
             </table>
+            <h1>gRPC: READ Room Value IoT Data</h1>
         </div>
     );
 }
