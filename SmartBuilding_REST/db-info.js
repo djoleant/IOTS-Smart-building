@@ -1,6 +1,8 @@
-const sql = require('mssql');
+const mysql = require('mysql2');
 
-module.exports = sql.connect({
-    database: process.env.DB_NAME,
-  server: 'localhost',
+module.exports = mysql.createConnection({
+    host: '127.0.0.1',
+    user: 'root',
+    password: 'root',
+    database: 'smart_building'
 });
