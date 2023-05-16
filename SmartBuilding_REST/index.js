@@ -10,6 +10,8 @@ const db = require('./db-info.js');
     //   const results = await db.promise().query('SELECT * FROM Rooms');
     //   res.status(200).send(results[0]);
     // })
+    var cors = require('cors') 
+    app.use(cors()) 
     
     app.get('/Room/:valueId', async (req, res) => {
         const results = await db.promise().query(`SELECT * FROM Rooms WHERE ValueId = '${req.params.valueId}'`);
