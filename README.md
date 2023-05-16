@@ -1,5 +1,5 @@
 # IoTS-Smart-building
-### ✨ Contributors (Student, ID)
+## ✨ Contributors (Student, ID)
 
 * Emilija Ćojbašić, 18026
 * Matija Špeletić, 18043
@@ -9,12 +9,12 @@
   <img src="https://contrib.rocks/image?repo=djoleant/InternClix" />
 </a>
 
-### 📦 Stack
+## 📦 Stack
 * Asp.net WebApi
 * NodeJS
 * React (JS)
 
-### 🚀 Quickstart
+## 🚀 Quickstart
 
 ```bash
 > # Clone repository
@@ -23,3 +23,9 @@
 >
 > # More steps soon
 ```
+## ⚙️ Configuration options
+
+| Environment variable name | Default value | 
+| ------------------------- | ------------- |
+| ... | ...| 
+| ... | ... |
