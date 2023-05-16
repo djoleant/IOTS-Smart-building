@@ -23,9 +23,9 @@ builder.Services.AddCors(options =>
                                     "http://localhost:3000")*/
                                     .AllowAnyHeader()
                            .AllowAnyMethod()
-                           .AllowCredentials()
-                           .AllowAnyOrigin();
-                          // policy.AllowAnyOrigin();
+                           //.AllowCredentials()
+                           .AllowAnyOrigin()
+                          .WithExposedHeaders("Grpc-Status", "Grpc-Message", "Grpc-Encoding", "Grpc-Accept-Encoding");
                           // policy.AllowAnyHeader();
                       });
 });
@@ -44,9 +44,16 @@ builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+app.UseCors("CORS");
 // Configure the HTTP request pipeline.
 app.MapGrpcService<GreeterService>();
-app.MapGrpcService<RoomService>();
+app.MapGrpcService<RoomService>().RequireCors("CORS");
 app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
 
+// app.UseEndpoints(endpoints =>
+// {
+//     endpoints.MapGrpcService<RoomService>().RequireCors("CORS");
+
+//     // ...snip... 
+// });
 app.Run();

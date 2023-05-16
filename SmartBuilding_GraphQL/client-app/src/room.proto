@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option csharp_namespace = "SmartBuilding_gRPC.Protos";
+
+service Room {
+	rpc GetRoominfo (RoomValsId) returns (RoomVals);
+	rpc AddRoominfo (RoomVals) returns (RoomValsId);
+	rpc UpdateRoominfo (RoomVals) returns (RoomVals);
+	rpc DeleteRoominfo (RoomValsId) returns (Empty);
+}
+
+message RoomVals {
+	string value_id = 1;
+	int64 timestamp = 2;
+	float co2 = 3;
+	float humidity = 4;
+	float light = 5;
+	float temperature = 6;
+}
+
+message RoomValsId{
+	string value_id = 1;
+}
+
+message Empty {}

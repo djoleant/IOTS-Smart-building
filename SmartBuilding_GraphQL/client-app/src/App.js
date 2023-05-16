@@ -2,6 +2,7 @@ import React from 'react';
 import SmartBuildingApp from './SmartBuildingsApp.js';
 import { ApolloProvider, useQuery, useMutation } from '@apollo/react-hooks';
 import { ApolloClient, InMemoryCache, gql } from '@apollo/client';
+import { RoomInfoComponent, AddRoomInfoComponent } from './SmartBuildings_gRPC.js';
 
 
 const client = new ApolloClient({
@@ -15,6 +16,10 @@ function App() {
       <ApolloProvider client={client}>
         <SmartBuildingApp />
       </ApolloProvider>
+      <div>
+        <RoomInfoComponent />
+        <AddRoomInfoComponent />
+      </div>
     </div>
   );
 }
