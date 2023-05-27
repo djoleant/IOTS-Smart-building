@@ -18,34 +18,32 @@ servers:
 channels:
   smartbuilding:
     subscribe:
-      operationId: emitUserSignUpEvent
+      operationId: SubscribeToSmartbuilding
       message:
-        $ref : '#/components/messages/UserSignedUp'
+        $ref : '#/components/messages/smartbuilding'
+    publish:
+      operationId: PublishToSmartbuilding
+      message:
+        $ref : '#/components/messages/smartbuilding'
 
 components:
   messages:
-    UserSignedUp:
-      name: userSignedUp
-      title: User signed up event
+    smartbuilding:
+      name: smartbuilding
+      title: Smartbuilding event
       summary: Inform about a new user registration in the system
       contentType: application/json
       payload:
-        $ref: '#/components/schemas/userSignedUpPayload'
+        $ref: '#/components/schemas/smartbuildingPayload'
 
   schemas:
-    userSignedUpPayload:
+    smartbuildingPayload:
       type: object
       properties:
-        firstName:
+        humidity:
           type: string
-          description: "foo"
-        lastName:
+          description: "hum"
+        temperature:
           type: string
-          description: "bar"
-        email:
-          type: string
-          format: email
-          description: "baz"
-        createdAt:
-          type: string
-          format: date-time  
+          description: "temp"
+ 
