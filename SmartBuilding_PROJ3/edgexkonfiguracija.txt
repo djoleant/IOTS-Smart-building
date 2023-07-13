@@ -1,0 +1,121 @@
+1. Na Data servisu, potrebno je izvrsiti HTTP POST metodu kako bi se kreirao ValueDescriptor:
+adresa: http://localhost:48080/api/v1/valuedescriptor
+body1: 
+{
+    "name": "id",
+    "description": "data from .csv file",
+    "min": "",
+    "max": "",
+    "type": "String",
+    "uomLabel": "id",
+    "defaultValue": "null",
+    "labels": [
+        "environment",
+        "id"
+    ]
+}
+
+body2: 
+{
+    "name": "timestamp",
+    "description": "data from .csv file",
+    "min": "",
+    "max": "",
+    "type": "String",
+    "uomLabel": "timestamp",
+    "defaultValue": "null",
+    "labels": [
+        "environment",
+        "timestamp"
+    ]
+}
+
+body3: 
+{
+    "name": "co2",
+    "description": "data from .csv file",
+    "min": "",
+    "max": "",
+    "type": "String",
+    "uomLabel": "co2",
+    "defaultValue": "null",
+    "labels": [
+        "environment",
+        "co2"
+    ]
+}
+
+body4: 
+{
+    "name": "temperature",
+    "description": "data from .csv file",
+    "min": "",
+    "max": "",
+    "type": "Int64",
+    "uomLabel": "temperature",
+    "defaultValue": "null",
+    "labels": [
+        "environment",
+        "temperature"
+    ]
+}
+
+body5: 
+{
+    "name": "light",
+    "description": "data from .csv file",
+    "min": "",
+    "max": "",
+    "type": "String",
+    "uomLabel": "light",
+    "defaultValue": "null",
+    "labels": [
+        "environment",
+        "light"
+    ]
+}
+
+body6: 
+{
+    "name": "humidity",
+    "description": "data from .csv file",
+    "min": "",
+    "max": "",
+    "type": "String",
+    "uomLabel": "humidity",
+    "defaultValue": "null",
+    "labels": [
+        "environment",
+        "humidity"
+    ]
+}
+
+2. Kreirati Device Profile pozivanjem HTTP POST metode na adresu http://localhost:48081/api/v1/deviceprofile/uploadfile
+i selktovanjem fajla docker-profile.yaml
+
+3. Kreirati device HTTP POST metodom na adresu http://localhost:48081/api/v1/device
+{
+    "name": "SensorValueCluster2",
+    "description": "Raspberry Pi sensor cluster",
+    "adminState": "unlocked",
+    "operatingState": "enabled",
+    "protocols": {
+        "HTTP": {
+            "host": "localhost",
+            "unitID": "1"
+        }
+    },
+    "labels": [
+        "Temperature sensor",
+        "DHT11"
+    ],
+    "location": "Nis",
+    "service": {
+        "name": "edgex-device-rest"
+    },
+    "profile": {
+        "name": "SensorCluster2"
+    }
+}
+
+https://www.youtube.com/watch?v=Jszd7zrl-_U - kako postaviti grafanu
