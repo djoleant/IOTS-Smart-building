@@ -22,7 +22,7 @@
 # NOTE:  this Docker Compose file does not contain the security services - namely the API Gateway
 # and Secret Store
 
-version: "3.4"
+version: '3.4'
 
 # all common shared environment variables defined here:
 x-common-env-variables: &common-variables
@@ -61,7 +61,7 @@ services:
     volumes:
       - consul-config:/consul/config:z
       - consul-data:/consul/data:z
-    environment:
+    environment: 
       - EDGEX_DB=redis
       - EDGEX_SECURE=false
 
@@ -78,67 +78,60 @@ services:
     volumes:
       - db-data:/data:z
 
-  mosquitto:
-    image: eclipse-mosquitto
-    network_mode: host
-    volumes:
-      - ./mosquitto:/conf
-      - ./mosquitto:/data
-      - ./mosquitto:/log
-    ports:
-      - "1883:1883"
-
+  monitoring:
+    build: 
+      context: .
+      dockerfile: ./monitoring-service/Dockerfile
   influxdb:
     image: influxdb:latest
     networks:
       - default
     ports:
-      - "8086:8086"
+      - '8086:8086'
     volumes:
       - ./influxdb-storage:/var/lib/influxdb
+    healthcheck:
+      test: "curl -f http://localhost:8086/ping"
+      interval: 5s
+      timeout: 10s
+      retries: 5
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       - ./grafana-provisioning/:/etc/grafana/provisioning
     depends_on:
-      - influxdb
-
+      - influxdb 
   visualization:
       build:
         context: .
-        dockerfile: ./visualization/Dockerfile
+        dockerfile: ./VisualizationService/Dockerfile
       depends_on:
-        - influxdb
-        - mosquitto
-  monitoring:
-      build:
-        context: .
-        dockerfile: ./monitoring/Dockerfile
-      depends_on:
-        - mosquitto
-  # The logging service has been deprecated in Geneva release and will be removed in the Hanoi release.
-  # All services are configure to send logging to STDOUT, i.e. not remote which requires this logging service
-  # If you still must use remote logging, un-comment the block below, all the related depends that have been commented out
-  # and the related global override that are commented out at the top.
-  #
-  #  logging:
-  #    image: edgexfoundry/docker-support-logging-go:1.2.1
-  #    ports:
-  #      - "0.0.0.0:48061:48061"
-  #    container_name: edgex-support-logging
-  #    hostname: edgex-support-logging
-  #    networks:
-  #      - edgex-network
-  #    environment:
-  #      <<: *common-variables
-  #      Service_Host: edgex-support-logging
-  #      Writable_Persistence: file
-  #      Databases_Primary_Type: file
-  #      Logging_EnableRemote: "false"
-  #    depends_on:
-  #      - consul
+        influxdb:
+          condition: service_healthy
+
+# The logging service has been deprecated in Geneva release and will be removed in the Hanoi release.
+# All services are configure to send logging to STDOUT, i.e. not remote which requires this logging service
+# If you still must use remote logging, un-comment the block below, all the related depends that have been commented out
+# and the related global override that are commented out at the top.
+#
+#  logging:
+#    image: edgexfoundry/docker-support-logging-go:1.2.1
+#    ports:
+#      - "0.0.0.0:48061:48061"
+#    container_name: edgex-support-logging
+#    hostname: edgex-support-logging
+#    networks:
+#      - edgex-network
+#    environment:
+#      <<: *common-variables
+#      Service_Host: edgex-support-logging
+#      Writable_Persistence: file
+#      Databases_Primary_Type: file
+#      Logging_EnableRemote: "false"
+#    depends_on:
+#      - consul
 
   system:
     image: edgexfoundry/docker-sys-mgmt-agent-go:1.2.1
@@ -157,7 +150,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:z
     depends_on:
       - consul
-      #      - logging  # uncomment if re-enabled remote logging
+#      - logging  # uncomment if re-enabled remote logging
       - scheduler
       - notifications
       - metadata
@@ -177,7 +170,7 @@ services:
       Service_Host: edgex-support-notifications
     depends_on:
       - consul
-      #      - logging  # uncomment if re-enabled remote logging
+#      - logging  # uncomment if re-enabled remote logging
       - redis
 
   metadata:
@@ -195,7 +188,7 @@ services:
       Notifications_Sender: edgex-core-metadata
     depends_on:
       - consul
-      #      - logging  # uncomment if re-enabled remote logging
+#      - logging  # uncomment if re-enabled remote logging
       - redis
       - notifications
 
@@ -213,7 +206,7 @@ services:
       Service_Host: edgex-core-data
     depends_on:
       - consul
-      #      - logging  # uncomment if re-enabled remote logging
+#      - logging  # uncomment if re-enabled remote logging
       - redis
       - metadata
 
@@ -230,7 +223,7 @@ services:
       Service_Host: edgex-core-command
     depends_on:
       - consul
-      #      - logging  # uncomment if re-enabled remote logging
+#      - logging  # uncomment if re-enabled remote logging
       - redis
       - metadata
 
@@ -249,7 +242,7 @@ services:
       IntervalActions_ScrubAged_Host: edgex-core-data
     depends_on:
       - consul
-      #      - logging  # uncomment if re-enabled remote logging
+#      - logging  # uncomment if re-enabled remote logging
       - redis
 
   app-service-rules:
@@ -269,45 +262,48 @@ services:
       Binding_PublishTopic: events
     depends_on:
       - consul
-      #      - logging  # uncomment if re-enabled remote logging
+#      - logging  # uncomment if re-enabled remote logging
       - data
+
 
   app-service-mqtt:
-    image: edgexfoundry/docker-app-service-configurable:1.1.0
-    ports:
-      - "0.0.0.0:48101:48101"
-    container_name: edgex-app-service-configurable-mqtt
-    hostname: edgex-app-service-configurable-mqtt
-    networks:
-      edgex-network:
-        aliases:
-          - edgex-app-service-configurable-mqtt
-    environment:
-      <<: *common-variables
-      edgex_profile: mqtt-export
-      Service_Host: edgex-app-service-configurable-mqtt
-      Service_Port: 48101
-      MessageBus_SubscribeHost_Host: edgex-core-data
-      Binding_PublishTopic: events
-      # Added for MQTT export using app service
-      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_ADDRESS: 172.20.192.1
-      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PORT: 1883
-      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PROTOCOL: tcp
-      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_TOPIC: "FISH-POND-SENSOR-DATA"
-      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_AUTORECONNECT: "true"
-      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_RETAIN: "true"
-      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_PERSISTONERROR: "false"
-      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PUBLISHER:
-      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_USER:
-      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PASSWORD:
-      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_QOS: ["your quality or service"]
-      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_KEY: [your Key]
-      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_CERT: [your Certificate]
+      image: edgexfoundry/docker-app-service-configurable:1.1.0
+      ports:
+        - "0.0.0.0:48101:48101"
+      container_name: edgex-app-service-configurable-mqtt
+      hostname: edgex-app-service-configurable-mqtt
+      networks:
+        edgex-network:
+          aliases:
+            - edgex-app-service-configurable-mqtt
+      environment:
+        <<: *common-variables
+        edgex_profile: mqtt-export
+        Service_Host: edgex-app-service-configurable-mqtt
+        Service_Port: 48101
+        MessageBus_SubscribeHost_Host: edgex-core-data
+        Binding_PublishTopic: events
+        # Added for MQTT export using app service
+        WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_ADDRESS: broker.hivemq.com
+        WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PORT: 1883
+        WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PROTOCOL: tcp
+        WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_TOPIC: "YOUR-UNIQUE-TOPIC"
+        WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_AUTORECONNECT: "true"
+        WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_RETAIN: "true"
+        WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_PERSISTONERROR: "false"
+        # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PUBLISHER: 
+        # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_USER: 
+        # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PASSWORD:
+        # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_QOS: ["your quality or service"]
+        # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_KEY: [your Key]  
+        # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_CERT: [your Certificate]
 
-    depends_on:
-      - consul
-      #      - logging  # uncomment if re-enabled remote logging
-      - data
+      depends_on:
+        - consul
+  #      - logging  # uncomment if re-enabled remote logging
+        - data
+
+
 
   rulesengine:
     image: emqx/kuiper:0.4.2-alpine
@@ -344,9 +340,9 @@ services:
   #   depends_on:
   #     - app-service-rules
 
-  #################################################################
-  # Device Services
-  #################################################################
+#################################################################
+# Device Services
+#################################################################
 
   device-rest:
     image: edgexfoundry/docker-device-rest-go:1.1.1
@@ -427,3 +423,4 @@ services:
 networks:
   edgex-network:
     driver: "bridge"
+

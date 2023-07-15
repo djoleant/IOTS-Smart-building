@@ -23,7 +23,7 @@ mqttClient.on('message', (topic, payload) => {
     const data = JSON.parse(payload.toString())
     if (data.device !== 'SensorValueCluster2') return;
     const co2 = data.readings[0].value
-    console.log(`CO2 is ${co2}`)
+    console.log(`CO2 concentration is ${co2}`)
 
     if (co2 < 490 && currentState === 'OFF')
     {
@@ -44,9 +44,8 @@ mqttClient.on('message', (topic, payload) => {
 async function sendAlert()
 {
 	const url =
-		'http://172.28.48.1:48082/api/v1/device/3196f63d-d7f3-48bf-ab8d-713224edcc16/command/6e0e7d21-c332-4e43-b3ef-f7c64b389ad1';
-	//3196f63d-d7f3-48bf-ab8d-713224edcc16
-	//6e0e7d21-c332-4e43-b3ef-f7c64b389ad1
+		'http://172.28.48.1:48082/api/v1/device/02d737ac-3970-49cf-b7e9-8023ba767655/command/6829a512-1f2c-4360-8770-279f99b9fce0';
+
 
 	const body = {
 		state: currentState,

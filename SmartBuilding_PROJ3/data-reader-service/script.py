@@ -4,7 +4,7 @@ import random
 import time
 import csv
 
-edgexip = '127.0.0.1'
+edgexip = '172.28.48.1'
 i = 0
 
 if __name__ == "__main__":
