@@ -1,3 +1,5 @@
+# /*******************************************************************************
+#  * Copyright 2020 Redis Labs Inc.
 #  * Copyright 2020 Intel Corporation.
 #  *
 #  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -10,20 +12,19 @@
 #  * or implied. See the License for the specific language governing permissions and limitations under
 #  * the License.
 #  *
-#  * EdgeX Foundry, Hanoi, version "master"
+#  * @author: Jim White, Dell
+#  * @author: Andre Srinivasan, Redis Labs
+#  * @author: Leonard Goodell, Intel
+#  * EdgeX Foundry, Geneva, version 1.2.0
+#  * added: May 14, 2020
 #  *******************************************************************************/
-#
-#
-#
-# ************************ This is a generated compose file ****************************
-#
-# DO NOT MAKE CHANGES that are intended to be permanent to EdgeX developer-scripts repo.
-#
-# Permanent changes can be made to the source compose files located in the compose-builder folder
-# at the top level of the developer-scripts repo.
-#
-# From the compose-builder folder use `make build` to regenerate all standard compose files variations
-#
+
+# NOTE:  this Docker Compose file does not contain the security services - namely the API Gateway
+# and Secret Store
+
+version: "3.4"
+
+# all common shared environment variables defined here:
 x-common-env-variables: &common-variables
   EDGEX_SECURITY_SECRET_STORE: "false"
   Registry_Host: edgex-core-consul
@@ -41,42 +42,236 @@ x-common-env-variables: &common-variables
   Logging_EnableRemote: "false"
   #  Clients_Logging_Host: edgex-support-logging # un-comment if re-enabling logging service for remote logging
 
-networks:
-  edgex-network:
-    driver: bridge
+volumes:
+  db-data:
+  log-data:
+  consul-config:
+  consul-data:
+
 services:
-  monitoring:
-    build: 
-      context: .
-      dockerfile: ./monitoring-service/Dockerfile
+  consul:
+    image: edgexfoundry/docker-edgex-consul:1.2.0
+    ports:
+      - "0.0.0.0:8400:8400"
+      - "0.0.0.0:8500:8500"
+    container_name: edgex-core-consul
+    hostname: edgex-core-consul
+    networks:
+      - edgex-network
+    volumes:
+      - consul-config:/consul/config:z
+      - consul-data:/consul/data:z
+    environment:
+      - EDGEX_DB=redis
+      - EDGEX_SECURE=false
+
+  redis:
+    image: redis:5.0.8-alpine
+    ports:
+      - "0.0.0.0:6379:6379"
+    container_name: edgex-redis
+    hostname: edgex-redis
+    networks:
+      - edgex-network
+    environment:
+      <<: *common-variables
+    volumes:
+      - db-data:/data:z
+
+  mosquitto:
+    image: eclipse-mosquitto
+    network_mode: host
+    volumes:
+      - ./mosquitto:/conf
+      - ./mosquitto:/data
+      - ./mosquitto:/log
+    ports:
+      - "1883:1883"
+
   influxdb:
     image: influxdb:latest
     networks:
       - default
     ports:
-      - '8086:8086'
+      - "8086:8086"
     volumes:
       - ./influxdb-storage:/var/lib/influxdb
-    healthcheck:
-      test: "curl -f http://localhost:8086/ping"
-      interval: 5s
-      timeout: 10s
-      retries: 5
   grafana:
     image: grafana/grafana:latest
     ports:
-      - '3000:3000'
+      - "3000:3000"
     volumes:
       - ./grafana-provisioning/:/etc/grafana/provisioning
     depends_on:
-      - influxdb 
+      - influxdb
+
   visualization:
       build:
         context: .
-        dockerfile: ./VisualizationService/Dockerfile
+        dockerfile: ./visualization/Dockerfile
       depends_on:
-        influxdb:
-          condition: service_healthy
+        - influxdb
+        - mosquitto
+  monitoring:
+      build:
+        context: .
+        dockerfile: ./monitoring/Dockerfile
+      depends_on:
+        - mosquitto
+  # The logging service has been deprecated in Geneva release and will be removed in the Hanoi release.
+  # All services are configure to send logging to STDOUT, i.e. not remote which requires this logging service
+  # If you still must use remote logging, un-comment the block below, all the related depends that have been commented out
+  # and the related global override that are commented out at the top.
+  #
+  #  logging:
+  #    image: edgexfoundry/docker-support-logging-go:1.2.1
+  #    ports:
+  #      - "0.0.0.0:48061:48061"
+  #    container_name: edgex-support-logging
+  #    hostname: edgex-support-logging
+  #    networks:
+  #      - edgex-network
+  #    environment:
+  #      <<: *common-variables
+  #      Service_Host: edgex-support-logging
+  #      Writable_Persistence: file
+  #      Databases_Primary_Type: file
+  #      Logging_EnableRemote: "false"
+  #    depends_on:
+  #      - consul
+
+  system:
+    image: edgexfoundry/docker-sys-mgmt-agent-go:1.2.1
+    ports:
+      - "0.0.0.0:48090:48090"
+    container_name: edgex-sys-mgmt-agent
+    hostname: edgex-sys-mgmt-agent
+    networks:
+      - edgex-network
+    environment:
+      <<: *common-variables
+      Service_Host: edgex-sys-mgmt-agent
+      ExecutorPath: /sys-mgmt-executor
+      MetricsMechanism: executor
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:z
+    depends_on:
+      - consul
+      #      - logging  # uncomment if re-enabled remote logging
+      - scheduler
+      - notifications
+      - metadata
+      - data
+      - command
+
+  notifications:
+    image: edgexfoundry/docker-support-notifications-go:1.2.1
+    ports:
+      - "0.0.0.0:48060:48060"
+    container_name: edgex-support-notifications
+    hostname: edgex-support-notifications
+    networks:
+      - edgex-network
+    environment:
+      <<: *common-variables
+      Service_Host: edgex-support-notifications
+    depends_on:
+      - consul
+      #      - logging  # uncomment if re-enabled remote logging
+      - redis
+
+  metadata:
+    image: edgexfoundry/docker-core-metadata-go:1.2.1
+    ports:
+      - "0.0.0.0:48081:48081"
+    container_name: edgex-core-metadata
+    hostname: edgex-core-metadata
+    networks:
+      - edgex-network
+    environment:
+      <<: *common-variables
+      Service_Host: edgex-core-metadata
+      Service_Timeout: "20000"
+      Notifications_Sender: edgex-core-metadata
+    depends_on:
+      - consul
+      #      - logging  # uncomment if re-enabled remote logging
+      - redis
+      - notifications
+
+  data:
+    image: edgexfoundry/docker-core-data-go:1.2.1
+    ports:
+      - "0.0.0.0:48080:48080"
+      - "0.0.0.0:5563:5563"
+    container_name: edgex-core-data
+    hostname: edgex-core-data
+    networks:
+      - edgex-network
+    environment:
+      <<: *common-variables
+      Service_Host: edgex-core-data
+    depends_on:
+      - consul
+      #      - logging  # uncomment if re-enabled remote logging
+      - redis
+      - metadata
+
+  command:
+    image: edgexfoundry/docker-core-command-go:1.2.1
+    ports:
+      - "0.0.0.0:48082:48082"
+    container_name: edgex-core-command
+    hostname: edgex-core-command
+    networks:
+      - edgex-network
+    environment:
+      <<: *common-variables
+      Service_Host: edgex-core-command
+    depends_on:
+      - consul
+      #      - logging  # uncomment if re-enabled remote logging
+      - redis
+      - metadata
+
+  scheduler:
+    image: edgexfoundry/docker-support-scheduler-go:1.2.1
+    ports:
+      - "0.0.0.0:48085:48085"
+    container_name: edgex-support-scheduler
+    hostname: edgex-support-scheduler
+    networks:
+      - edgex-network
+    environment:
+      <<: *common-variables
+      Service_Host: edgex-support-scheduler
+      IntervalActions_ScrubPushed_Host: edgex-core-data
+      IntervalActions_ScrubAged_Host: edgex-core-data
+    depends_on:
+      - consul
+      #      - logging  # uncomment if re-enabled remote logging
+      - redis
+
+  app-service-rules:
+    image: edgexfoundry/docker-app-service-configurable:1.2.0
+    ports:
+      - "0.0.0.0:48100:48100"
+    container_name: edgex-app-service-configurable-rules
+    hostname: edgex-app-service-configurable-rules
+    networks:
+      - edgex-network
+    environment:
+      <<: *common-variables
+      edgex_profile: rules-engine
+      Service_Host: edgex-app-service-configurable-rules
+      Service_Port: 48100
+      MessageBus_SubscribeHost_Host: edgex-core-data
+      Binding_PublishTopic: events
+    depends_on:
+      - consul
+      #      - logging  # uncomment if re-enabled remote logging
+      - data
+
   app-service-mqtt:
     image: edgexfoundry/docker-app-service-configurable:1.1.0
     ports:
@@ -94,326 +289,141 @@ services:
       Service_Port: 48101
       MessageBus_SubscribeHost_Host: edgex-core-data
       Binding_PublishTopic: events
-      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_ADDRESS: broker.hivemq.com
+      # Added for MQTT export using app service
+      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_ADDRESS: 172.20.192.1
       WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PORT: 1883
       WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PROTOCOL: tcp
-      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_TOPIC: edgex/sensor_value
+      WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_TOPIC: "FISH-POND-SENSOR-DATA"
       WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_AUTORECONNECT: "true"
       WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_RETAIN: "true"
       WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_PERSISTONERROR: "false"
+      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PUBLISHER:
+      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_USER:
+      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_ADDRESSABLE_PASSWORD:
+      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_QOS: ["your quality or service"]
+      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_KEY: [your Key]
+      # WRITABLE_PIPELINE_FUNCTIONS_MQTTSEND_PARAMETERS_CERT: [your Certificate]
 
     depends_on:
       - consul
-#      - logging  # uncomment if re-enabled remote logging
+      #      - logging  # uncomment if re-enabled remote logging
       - data
 
-  app-service-rules:
-    container_name: edgex-app-service-configurable-rules
-    depends_on:
-    - consul
-    - data
-    environment:
-      BINDING_PUBLISHTOPIC: events
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_PROFILE: rules-engine
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      MESSAGEBUS_SUBSCRIBEHOST_HOST: edgex-core-data
-      REGISTRY_HOST: edgex-core-consul
-      SERVICE_HOST: edgex-app-service-configurable-rules
-      SERVICE_PORT: 48100
-    hostname: edgex-app-service-configurable-rules
-    image: edgexfoundry/docker-app-service-configurable:1.3.1
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:48100:48100/tcp
-    read_only: true
-  command:
-    container_name: edgex-core-command
-    depends_on:
-    - consul
-    - database
-    - metadata
-    environment:
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      REGISTRY_HOST: edgex-core-consul
-      SERVICE_HOST: edgex-core-command
-    hostname: edgex-core-command
-    image: edgexfoundry/docker-core-command-go:1.3.1
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:48082:48082/tcp
-    read_only: true
-  consul:
-    container_name: edgex-core-consul
-    environment:
-      EDGEX_DB: redis
-      EDGEX_SECURE: "false"
-    hostname: edgex-core-consul
-    image: edgexfoundry/docker-edgex-consul:1.3.0
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:8500:8500/tcp
-    read_only: true
-    volumes:
-    - consul-config:/consul/config:z
-    - consul-data:/consul/data:z
-    - consul-scripts:/consul/scripts:z
-  data:
-    container_name: edgex-core-data
-    depends_on:
-    - consul
-    - database
-    - metadata
-    environment:
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      REGISTRY_HOST: edgex-core-consul
-      SERVICE_HOST: edgex-core-data
-    hostname: edgex-core-data
-    image: edgexfoundry/docker-core-data-go:1.3.1
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:5563:5563/tcp
-    - 127.0.0.1:48080:48080/tcp
-    read_only: true
-  database:
-    container_name: edgex-redis
-    environment:
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      REGISTRY_HOST: edgex-core-consul
-    hostname: edgex-redis
-    image: redis:6.0.9-alpine
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:6379:6379/tcp
-    read_only: true
-    volumes:
-    - db-data:/data:z
-  device-rest:
-    container_name: edgex-device-rest
-    depends_on:
-    - consul
-    - data
-    - metadata
-    environment:
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      REGISTRY_HOST: edgex-core-consul
-      SERVICE_HOST: edgex-device-rest
-    hostname: edgex-device-rest
-    image: edgexfoundry/docker-device-rest-go:1.2.1
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:49986:49986/tcp
-    read_only: true
-  device-virtual:
-    container_name: edgex-device-virtual
-    depends_on:
-    - consul
-    - data
-    - metadata
-    environment:
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      REGISTRY_HOST: edgex-core-consul
-      SERVICE_HOST: edgex-device-virtual
-    hostname: edgex-device-virtual
-    image: edgexfoundry/docker-device-virtual-go:1.3.1
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:49990:49990/tcp
-  metadata:
-    container_name: edgex-core-metadata
-    depends_on:
-    - consul
-    - database
-    - notifications
-    environment:
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      NOTIFICATIONS_SENDER: edgex-core-metadata
-      REGISTRY_HOST: edgex-core-consul
-      SERVICE_HOST: edgex-core-metadata
-    hostname: edgex-core-metadata
-    image: edgexfoundry/docker-core-metadata-go:1.3.1
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:48081:48081/tcp
-    read_only: true
-  notifications:
-    container_name: edgex-support-notifications
-    depends_on:
-    - consul
-    - database
-    environment:
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      REGISTRY_HOST: edgex-core-consul
-      SERVICE_HOST: edgex-support-notifications
-    hostname: edgex-support-notifications
-    image: edgexfoundry/docker-support-notifications-go:1.3.1
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:48060:48060/tcp
-    read_only: true
   rulesengine:
+    image: emqx/kuiper:0.4.2-alpine
+    ports:
+      - "0.0.0.0:48075:48075"
+      - "0.0.0.0:20498:20498"
     container_name: edgex-kuiper
-    depends_on:
-    - app-service-rules
-    environment:
-      EDGEX__DEFAULT__PORT: 5566
-      EDGEX__DEFAULT__PROTOCOL: tcp
-      EDGEX__DEFAULT__SERVER: edgex-app-service-configurable-rules
-      EDGEX__DEFAULT__SERVICESERVER: http://edgex-core-data:48080
-      EDGEX__DEFAULT__TOPIC: events
-      KUIPER__BASIC__CONSOLELOG: "true"
-      KUIPER__BASIC__RESTPORT: 48075
     hostname: edgex-kuiper
-    image: emqx/kuiper:1.1.1-alpine
     networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:20498:20498/tcp
-    - 127.0.0.1:48075:48075/tcp
-  scheduler:
-    container_name: edgex-support-scheduler
-    depends_on:
-    - consul
-    - database
+      - edgex-network
     environment:
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      INTERVALACTIONS_SCRUBAGED_HOST: edgex-core-data
-      INTERVALACTIONS_SCRUBPUSHED_HOST: edgex-core-data
-      REGISTRY_HOST: edgex-core-consul
-      SERVICE_HOST: edgex-support-scheduler
-    hostname: edgex-support-scheduler
-    image: edgexfoundry/docker-support-scheduler-go:1.3.1
-    networks:
-      edgex-network: {}
-    ports:
-    - 127.0.0.1:48085:48085/tcp
-    read_only: true
-  system:
-    container_name: edgex-sys-mgmt-agent
+      # KUIPER_DEBUG: "true"
+      KUIPER_CONSOLE_LOG: "true"
+      KUIPER_REST_PORT: 48075
+      EDGEX_SERVER: edgex-app-service-configurable-rules
+      EDGEX_SERVICE_SERVER: http://edgex-core-data:48080
+      EDGEX_TOPIC: events
+      EDGEX_PROTOCOL: tcp
+      EDGEX_PORT: 5566
     depends_on:
-    - command
-    - consul
-    - data
-    - metadata
-    - notifications
-    - scheduler
-    environment:
-      CLIENTS_COMMAND_HOST: edgex-core-command
-      CLIENTS_COREDATA_HOST: edgex-core-data
-      CLIENTS_DATA_HOST: edgex-core-data
-      CLIENTS_METADATA_HOST: edgex-core-metadata
-      CLIENTS_NOTIFICATIONS_HOST: edgex-support-notifications
-      CLIENTS_RULESENGINE_HOST: edgex-kuiper
-      CLIENTS_SCHEDULER_HOST: edgex-support-scheduler
-      CLIENTS_VIRTUALDEVICE_HOST: edgex-device-virtual
-      DATABASES_PRIMARY_HOST: edgex-redis
-      EDGEX_SECURITY_SECRET_STORE: "false"
-      EXECUTORPATH: /sys-mgmt-executor
-      METRICSMECHANISM: executor
-      REGISTRY_HOST: edgex-core-consul
-      SERVICE_HOST: edgex-sys-mgmt-agent
-    hostname: edgex-sys-mgmt-agent
-    image: edgexfoundry/docker-sys-mgmt-agent-go:1.3.1
-    networks:
-      edgex-network: {}
+      - app-service-rules
+
+  # Support RulesEngine has been deprecated in the Geneva (1.2.0) release
+  # If still required, simply uncomment the block below and comment out the block above.
+  #
+  # rulesengine:
+  #   image: edgexfoundry/docker-support-rulesengine:1.2.1
+  #   ports:
+  #     - "0.0.0.0:48075:48075"
+  #   container_name: edgex-support-rulesengine
+  #   hostname: edgex-support-rulesengine
+  #   networks:
+  #     - edgex-network
+  #   depends_on:
+  #     - app-service-rules
+
+  #################################################################
+  # Device Services
+  #################################################################
+
+  device-rest:
+    image: edgexfoundry/docker-device-rest-go:1.1.1
     ports:
-    - 127.0.0.1:48090:48090/tcp
-    read_only: true
-    volumes:
-    - /var/run/docker.sock:/var/run/docker.sock:z
-version: '3.7'
-volumes:
-  consul-config: {}
-  consul-data: {}
-  consul-scripts: {}
-  db-data: {}
-  log-data: {}
+      - "0.0.0.0:49986:49986"
+    container_name: edgex-device-rest
+    hostname: edgex-device-rest
+    networks:
+      - edgex-network
+    environment:
+      <<: *common-variables
+      Service_Host: edgex-device-rest
+    depends_on:
+      - data
+      - command
+  #      - logging  # uncomment if re-enabled remote logging
+
+#  device-random:
+#    image: edgexfoundry/docker-device-random-go:1.2.1
+#    ports:
+#      - "0.0.0.0:49988:49988"
+#    container_name: edgex-device-random
+#    hostname: edgex-device-random
+#    networks:
+#      - edgex-network
+#    environment:
+#      <<: *common-variables
+#      Service_Host: edgex-device-random
+#    depends_on:
+#      - data
+#      - command
+#
+#  device-mqtt:
+#    image: edgexfoundry/docker-device-mqtt-go:1.2.1
+#    ports:
+#      - "0.0.0.0:49982:49982"
+#    container_name: edgex-device-mqtt
+#    hostname: edgex-device-mqtt
+#    networks:
+#      - edgex-network
+#    environment:
+#      <<: *common-variables
+#      Service_Host: edgex-device-mqtt
+#    depends_on:
+#      - data
+#      - command
+#
+#  device-modbus:
+#    image: edgexfoundry/docker-device-modbus-go:1.2.1
+#    ports:
+#      - "0.0.0.0:49991:49991"
+#    container_name: edgex-device-modbus
+#    hostname: edgex-device-modbus
+#    networks:
+#      - edgex-network
+#    environment:
+#      <<: *common-variables
+#      Service_Host: edgex-device-modbus
+#    depends_on:
+#      - data
+#      - command
+#
+#  device-snmp:
+#    image: edgexfoundry/docker-device-snmp-go:1.2.1
+#    ports:
+#      - "0.0.0.0:49993:49993"
+#    container_name: edgex-device-snmp
+#    hostname: edgex-device-snmp
+#    networks:
+#      - edgex-network
+#    environment:
+#      <<: *common-variables
+#      Service_Host: edgex-device-snmp
+#    depends_on:
+#      - data
+#      - command
+
+networks:
+  edgex-network:
+    driver: "bridge"
